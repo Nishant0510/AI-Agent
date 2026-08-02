@@ -11,7 +11,7 @@
 [![LangGraph](https://img.shields.io/badge/LangGraph-Orchestration-1C3C3C?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
 [![FAISS](https://img.shields.io/badge/FAISS-Vector%20Store-0467DF?style=for-the-badge)](https://github.com/facebookresearch/faiss)
 [![HuggingFace](https://img.shields.io/badge/🤗-HuggingFace-FFD21E?style=for-the-badge)](https://huggingface.co/)
-[![Qwen2.5](https://img.shields.io/badge/Qwen2.5--7B-LLM-purple?style=for-the-badge)](https://huggingface.co/Qwen)
+[![Qwen2.5)](https://img.shields.io/badge/Qwen2.5--7B-LLM-purple?style=for-the-badge)](https://huggingface.co/Qwen)
 
 [![License](https://img.shields.io/badge/License-Educational%2FShowcase-lightgrey?style=flat-square)]()
 [![Build](https://img.shields.io/badge/Build-Passing-brightgreen?style=flat-square)]()
@@ -126,7 +126,7 @@ The system showcases a modern **Multi-Agent AI architecture** orchestrated with 
 - Source Citations & Page Number References
 
 **Operations**
-- Qwen2.5-7B-Instruct LLM
+- Qwen2.5-7B/OpenAI(Optional) LLM
 - Structured Logging
 - Bootstrap Chat Interface
 - Comprehensive Unit Tests
@@ -150,7 +150,7 @@ graph TB
     end
 
     subgraph Orchestration["🧠 Orchestration Layer"]
-        SUPERVISOR["LangGraph Supervisor Agent"]
+        SUPERVISOR["LangGraph Supervisor Orchestrator"]
     end
 
     subgraph Agents["🤖 Agent Layer"]
@@ -206,7 +206,7 @@ Each agent has a **single, well-defined responsibility**, following the separati
 
 ```mermaid
 graph LR
-    A["1️⃣ Supervisor Agent<br/>Entry point & routing"] --> B["2️⃣ Security Agent<br/>Injection & jailbreak detection"]
+    A["1️⃣ Supervisor Orchestrator<br/>Entry point & routing"] --> B["2️⃣ Security Agent<br/>Injection & jailbreak detection"]
     B --> C["3️⃣ Document Agent<br/>Verify documents & DB"]
     C --> D["4️⃣ Retrieval Agent<br/>FAISS search & Top-K"]
     D --> E["5️⃣ Confidence Agent<br/>Score & gate decision"]
@@ -228,7 +228,7 @@ graph LR
 
 | # | Agent | Primary Responsibility | Key Outputs |
 |---|---|---|---|
-| 1 | **Supervisor Agent** | Entry point, execution routing, state management, conditional branching | Workflow control signals |
+| 1 | **Supervisor Orchestrator** | Entry point, execution routing, state management, conditional branching | Workflow control signals |
 | 2 | **Security Agent** | Prompt injection detection, jailbreak detection, sanitization, unsafe request blocking | Sanitized query / block signal |
 | 3 | **Document Agent** | Verify uploaded documents, FAISS DB integrity, metadata validity | Availability status |
 | 4 | **Retrieval Agent** | Generate query embeddings, FAISS search, Top-5 retrieval, deduplication, similarity thresholding | Retrieved chunks |
@@ -481,7 +481,7 @@ APP_NAME=Philips Product Knowledge AI Agent
 LOG_LEVEL=INFO
 
 EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
-LLM_MODEL=Qwen/Qwen2.5-7B-Instruct
+LLM_MODEL=Qwen/Qwen2.5-7B
 
 VECTOR_DB=data/vector_db
 DATA_DIRECTORY=data/users
@@ -500,11 +500,11 @@ DEVICE=cpu
 | `APP_NAME` | Display name of the application | `Philips Product Knowledge AI Agent` |
 | `LOG_LEVEL` | Logging verbosity | `INFO` |
 | `EMBEDDING_MODEL` | HuggingFace embedding model identifier | `BAAI/bge-base-en-v1.5` |
-| `LLM_MODEL` | LLM used for answer generation | `Qwen/Qwen2.5-7B-Instruct` |
+| `LLM_MODEL` | LLM used for answer generation | `Qwen/Qwen2.5-7B` |
 | `VECTOR_DB` | Path to persisted FAISS index | `data/vector_db` |
 | `DATA_DIRECTORY` | Directory for uploaded source PDFs | `data/users` |
 | `TOP_K` | Number of chunks retrieved per query | `5` |
-| `SIMILARITY_THRESHOLD` | Minimum similarity score to proceed with generation | `0.75` |
+| `SIMILARITY_THRESHOLD` | Minimum similarity score to proceed with generation | `0.50` |
 | `MAX_CONTEXT_CHUNKS` | Maximum chunks passed into LLM context | `5` |
 | `DEVICE` | Inference device (`cpu` or `cuda`) | `cpu` |
 
@@ -821,7 +821,7 @@ graph TB
 
     subgraph ModelLayer["Model Layer"]
         Embedder["BAAI/bge-base-en-v1.5<br/>(Embedding Model)"]
-        LLMModel["Qwen2.5-7B-Instruct<br/>(Generation Model)"]
+        LLMModel["Qwen2.5-7B/OpenAI(optional)<br/>(Generation Model)"]
     end
 
     subgraph DataLayer["Data Layer"]
@@ -928,7 +928,7 @@ Contributions, issues, and feature requests are welcome!
 This project is intended as an **enterprise AI engineering showcase and educational reference**.
 
 > **⚠️ Important**
-> Review and comply with the licenses of all third-party models, libraries, and datasets used (including `Qwen2.5-7B-Instruct`, `BAAI/bge-base-en-v1.5`, and FAISS) before deploying this system in a production environment.
+> Review and comply with the licenses of all third-party models, libraries, and datasets used (including `Qwen2.5-7B`, `BAAI/bge-base-en-v1.5`, and FAISS) before deploying this system in a production environment.
 
 ---
 
