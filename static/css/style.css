@@ -1,0 +1,97 @@
+:root {
+    --confidence-pass-bg: #d1e7dd;
+    --confidence-pass-text: #0f5132;
+    --confidence-refuse-bg: #f8d7da;
+    --confidence-refuse-text: #842029;
+}
+
+body {
+    background-color: #f5f6f8;
+}
+
+.chat-window {
+    height: 55vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background-color: #fff;
+}
+
+.chat-bubble {
+    max-width: 85%;
+    padding: 0.6rem 0.9rem;
+    border-radius: 0.75rem;
+    line-height: 1.4;
+}
+
+.chat-bubble.user {
+    align-self: flex-end;
+    background-color: #0d6efd;
+    color: #fff;
+    border-bottom-right-radius: 0.15rem;
+}
+
+.chat-bubble.assistant {
+    align-self: flex-start;
+    background-color: #eef0f2;
+    color: #212529;
+    border-bottom-left-radius: 0.15rem;
+}
+
+.chat-bubble.assistant.refused {
+    background-color: var(--confidence-refuse-bg);
+    color: var(--confidence-refuse-text);
+    border: 1px solid #f1aeb5;
+}
+
+.confidence-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 1rem;
+    margin-bottom: 0.35rem;
+}
+
+.confidence-badge.pass {
+    background-color: var(--confidence-pass-bg);
+    color: var(--confidence-pass-text);
+}
+
+.confidence-badge.refuse {
+    background-color: var(--confidence-refuse-bg);
+    color: var(--confidence-refuse-text);
+}
+
+.bubble-sources {
+    margin-top: 0.5rem;
+    font-size: 0.8rem;
+    border-top: 1px solid rgba(0,0,0,0.08);
+    padding-top: 0.4rem;
+}
+
+.bubble-sources ul {
+    margin-bottom: 0;
+    padding-left: 1.1rem;
+}
+
+.source-doc-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.6rem;
+}
+
+.source-doc-card:last-child {
+    margin-bottom: 0;
+}
+
+.typing-indicator {
+    font-style: italic;
+    color: #6c757d;
+    font-size: 0.85rem;
+}
