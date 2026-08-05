@@ -662,28 +662,7 @@ Run with coverage:
 pytest --cov=app
 ```
 
-### Recommended Test Scenarios
 
-```mermaid
-mindmap
-  root((Test Coverage))
-    Document Upload
-      Multiple PDFs
-      Large PDFs
-      Corrupted PDFs
-      Empty Documents
-    Security
-      Prompt Injection
-      Jailbreak Attempts
-    Query Handling
-      Unknown Questions
-      Long Queries
-      Concurrent Requests
-    System State
-      Missing Vector Database
-      Confidence Threshold Validation
-      Citation Generation
-```
 
 | Category | Scenario |
 |---|---|
