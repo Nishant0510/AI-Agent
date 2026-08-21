@@ -2,7 +2,8 @@ pypdf
 langchain 
 langchain-text-splitters 
 sentence-transformers
-faiss-cpu pydantic
+faiss-cpu
+pydantic
 ollama
 fastapi
 

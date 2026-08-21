@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _client = ollama.Client(host=settings.ollama_host)
 
 
-def generate(prompt: str, temperature: float = 0.1) -> str:
+def generate(prompt: str, temperature: float = 0.5) -> str:
     """
     Sends a single prompt to the local Ollama-served Qwen2.5 model and
     returns the raw text response. Low temperature by default since

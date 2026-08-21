@@ -57,6 +57,7 @@
 - [Testing](#-testing)
 - [Troubleshooting](#-troubleshooting)
 - [Logging & Observability](#-logging--observability)
+- [Performance](#-performance)
 - [Security Features](#-security-features)
 - [Deployment Topology](#-deployment-topology)
 - [Future Improvements](#-future-improvements)
@@ -93,6 +94,71 @@ The system showcases a modern **Multi-Agent AI architecture** orchestrated with 
 | Single monolithic prompt | Multi-agent pipeline with specialized responsibilities |
 | No confidence signaling | Confidence-based decision making with refusal logic |
 | Difficult to audit | Full structured logging with node execution trace |
+
+---
+
+## 👥 Who This Is For
+
+**Primary users**
+
+- **[e.g., Field Service Engineers]** — troubleshoot Philips equipment on-site or remotely and need fast, trustworthy answers to "does the manual say X" questions without paging through a 200-page PDF.
+- **[e.g., L1/L2 Support Agents]** — handle inbound calls/tickets and need to confirm procedures, specs, or error-code meanings against the official manual before responding to a customer.
+- **[Add/replace with your actual target users]**
+
+**What they do today, without this**
+
+- Manually search PDF manuals (Ctrl+F across large documents, or physical binders).
+- Ask a more senior colleague and wait for a reply.
+- Rely on memory or informal tribal knowledge, which risks inconsistent or outdated answers.
+- Escalate tickets that could have been resolved with a manual lookup.
+
+**What changes with this system**
+
+- A natural-language question returns a grounded answer with the exact document, page, and chunk it came from — so the user can verify it themselves in seconds rather than trusting an unsourced claim.
+- If the manuals don't contain the answer, the system says so instead of guessing — preserving trust in the tool over time.
+
+**Ownership post-launch**
+
+> **📝 Status:** Define who is accountable for this system once it's live — this is currently undefined and should be filled in before treating this as production-ready.
+
+- **Content owner:** [who is responsible for keeping the uploaded manuals current — e.g., a documentation/knowledge-management team]
+- **System owner:** [who is responsible for uptime, model updates, and the vector DB rebuild cadence — e.g., the engineering team that built it, or a platform/MLOps team]
+- **Escalation path:** [what happens when the system refuses to answer or gives a low-confidence response — who reviews the log and closes the gap in documentation]
+
+---
+
+## 🔗 Workflow Integration
+
+This system is designed to plug into an **existing support workflow**, not to stand alone as a general-purpose chatbot.
+
+> **📝 Status:** The specific integration point below is illustrative. Replace it with the actual workflow this will be embedded in before calling it "integrated."
+
+**Where it fits**
+
+```mermaid
+flowchart LR
+    A["Ticket / Call Comes In"] --> B{"Can agent answer<br/>from memory?"}
+    B -->|Yes| C["Respond directly"]
+    B -->|No| D["Query Philips AI Agent<br/>via ticket tool / technician app"]
+    D --> E{"Confident,<br/>grounded answer?"}
+    E -->|Yes| F["Agent verifies citation<br/>& responds to customer"]
+    E -->|No / Refused| G["Escalate to L2 /<br/>flag documentation gap"]
+
+    style D fill:#e3f2fd,stroke:#1565c0
+    style F fill:#c8e6c9,stroke:#2e7d32
+    style G fill:#ffe0b2,stroke:#e65100
+```
+
+**Integration points to consider** (choose and detail the one(s) relevant to your deployment):
+
+| Integration Point | Description | Status |
+|---|---|---|
+| **Ticketing system lookup** | Support agent queries the system from within the ticketing tool (e.g., as a sidebar panel or slash command) before responding to a ticket | [Planned / In progress / Not started] |
+| **Call center knowledge lookup** | Agent queries the system live during a call, e.g., via a browser tab or internal tool, to answer caller questions in real time | [Planned / In progress / Not started] |
+| **Technician mobile app** | Field engineer queries the system from a mobile app while on-site, without needing network access to the full manual PDF | [Planned / In progress / Not started] |
+| **Standalone web UI (current state)** | The Bootstrap chat interface included in this repo, used directly | Implemented |
+
+**Why this matters:** a chatbot that exists in isolation, disconnected from where support work actually happens, tends to go unused. The goal is for this to be a lookup step inside an existing process — not an extra tool agents have to remember to open.
 
 ---
 
@@ -771,6 +837,48 @@ Logs are stored under `logs/`.
 
 ---
 
+## ⚡ Performance
+
+The following snapshot was generated from `logs/app.jsonl` using the
+latency aggregation script. It covers six completed requests across 18 parsed
+JSON log records; no malformed records were skipped.
+
+| Outcome | Count |
+|---|---:|
+| Responded | 6 |
+
+### End-to-end request latency
+
+| Requests | P50 | P95 | Min | Max |
+|---:|---:|---:|---:|---:|
+| 6 | 10,812.42 ms | 18,056.40 ms | 2,656.86 ms | 18,597.94 ms |
+
+### Node latency
+
+| Node | Samples | P50 | P95 | Min | Max |
+|---|---:|---:|---:|---:|
+| `graph:step:1` | 6 | 0.54 ms | 2.64 ms | 0.42 ms | 3.27 ms |
+| `graph:step:2` | 6 | 0.69 ms | 4.25 ms | 0.44 ms | 5.25 ms |
+| `graph:step:3` | 6 | 156.50 ms | 6,883.93 ms | 44.37 ms | 6,915.25 ms |
+| `graph:step:4` | 6 | 0.55 ms | 0.64 ms | 0.52 ms | 0.66 ms |
+| `graph:step:5` | 6 | 7,254.16 ms | 15,124.94 ms | 2,576.25 ms | 16,239.35 ms |
+| `graph:step:6` | 6 | 0.38 ms | 1.95 ms | 0.31 ms | 2.12 ms |
+| `graph:step:7` | 6 | 0.38 ms | 2.06 ms | 0.31 ms | 2.22 ms |
+| `seq:step:3` | 18 | 0.03 ms | 0.20 ms | 0.03 ms | 0.21 ms |
+| `unknown_node` | 6 | 10,793.77 ms | 18,052.05 ms | 2,656.61 ms | 18,592.44 ms |
+
+LLM latency was not recorded for this sample (`count=0`). This means no
+percentile can be reported; it does **not** mean LLM latency was zero. The
+`graph:*`, `seq:*`, and `unknown_node` labels are LangGraph callback labels.
+
+Recalculate these figures as log volume grows:
+
+```bash
+venv\\Scripts\\python.exe scripts\\aggregate_log_latencies.py --log-path logs\\app.jsonl
+```
+
+---
+
 ## 🛡 Security Features
 
 | Feature | Description |
@@ -826,6 +934,43 @@ graph TB
 
 > **💡 Tip**
 > For production deployments, place Uvicorn behind a reverse proxy (e.g., Nginx) with TLS termination, and consider deploying via Docker/Kubernetes as noted in the [Future Improvements](#-future-improvements) section.
+
+---
+
+
+## 📈 Impact
+
+> **⚠️ Honesty note:** This project has **not** run a formal pilot with real users as of this writing. The figures below are framed as **projections derived from measured system latency and behavior**, not from field-measured business outcomes (e.g., ticket deflection rate, handle-time reduction). Do not present this section as validated ROI until a pilot has actually run — replace the placeholders once real numbers exist.
+
+**Current status:** [Pre-pilot / Internal testing only / Pilot in progress with (team/group) since (date) / Other — describe accurately]
+
+### What has actually been measured
+
+| Metric | How it was measured | Value | Source |
+|---|---|---|---|
+| End-to-end request latency (P50/P95) | [e.g., `Execution Time` field from structured logs, see Logging & Observability] | [fill in from your logs] | Internal logs, [date range] |
+| Retrieval confidence distribution | Confidence Agent scores across test query set | [fill in] | Internal logs, [date range] |
+| Refusal rate | % of `/ask` requests returning `Refused` per the Request Lifecycle | [fill in] | Internal logs, [date range] |
+| Citation coverage | % of non-refused answers with ≥1 valid citation | [fill in] | Validation Agent logs |
+
+### What can be reasonably projected from the above (and how)
+
+- **Time-to-answer, if adopted:** if measured retrieval + generation latency is *[X seconds]*, that's a defensible lower bound on how fast a user could get a grounded answer through this tool, **compared to** the manual-search baseline described in Who This Is For — which has not itself been timed yet. State the comparison as directional, not as a precise percentage saved, until the baseline is actually measured.
+- **Where confidence is a proxy for accuracy, not a substitute:** a high confidence score means retrieval found closely matching text — it is not independent proof the final answer is correct. Any claimed accuracy rate must come from actual human review of a sample of answers, not from the confidence score alone.
+
+### What is explicitly NOT claimed here
+
+- No claim of ticket deflection, handle-time reduction, or cost savings — these require a real pilot with a comparison group.
+- No claim of user satisfaction or adoption — no users have used this in production yet.
+- No claim of accuracy rate beyond what has been manually spot-checked (state the sample size if you have one, e.g., "manually reviewed N answers against source manuals, M were fully correct").
+
+### Plan to close the gap
+
+1. [Define pilot scope — e.g., N support agents, M weeks, specific product line's manuals]
+2. [Define baseline measurement — time a sample of manual lookups before pilot starts]
+3. [Define success metrics up front — e.g., median time-to-answer, refusal rate ceiling, agent-reported trust score]
+4. [Run pilot, collect logs per Logging & Observability]
+5. [Replace this section's placeholders with real, dated numbers]
 
 ---
 

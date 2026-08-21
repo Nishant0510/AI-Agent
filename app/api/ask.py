@@ -1,6 +1,6 @@
 # app/api/ask.py (excerpt)
 from app.services.logging_service import RequestLogContext
-from app.agent.graph.callbacks import PipelineLoggingCallback
+from app.agent.graph.callback import PipelineLoggingCallback
 
 import traceback
 @router.post("/ask")

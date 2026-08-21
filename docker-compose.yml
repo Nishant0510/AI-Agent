@@ -1,0 +1,25 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DEVICE: cpu
+      VECTOR_DB: data/vector_db
+      DATA_DIRECTORY: data/users
+      LOG_DIR: logs
+      # Uses a locally running Ollama instance by default. Override OLLAMA_HOST
+      # in .env when using a remote Ollama server.
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+    volumes:
+      # Persist the FAISS index, uploaded manuals, and structured JSON logs.
+      - ./data/vector_db:/app/data/vector_db
+      - ./data/users:/app/data/users
+      - ./logs:/app/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

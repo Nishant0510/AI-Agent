@@ -9,7 +9,6 @@ load_dotenv()
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Philips Product Knowledge AI Agent")
-    log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     # Embedding Model
     embedding_model: str = os.getenv(
@@ -39,6 +38,9 @@ class Settings:
         "OLLAMA_HOST",
         "http://localhost:11434"
     )
+
+    log_dir: str = os.getenv("LOG_DIR", "logs")
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     # -----------------------------
     # Retrieval

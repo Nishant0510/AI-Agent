@@ -1,0 +1,12 @@
+.git
+.env
+venv
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+pytest-cache-files-*
+logs
+data/vector_db
+data/users
+simplygo chunks

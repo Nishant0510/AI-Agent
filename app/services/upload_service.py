@@ -38,7 +38,7 @@ def save_uploaded_pdf(file: UploadFile) -> Path:
     """Validate and persist an uploaded PDF into DATA_DIRECTORY."""
     _validate_pdf(file)
 
-    data_dir = Path(settings.DATA_DIRECTORY)
+    data_dir = Path(settings.data_directory)
     data_dir.mkdir(parents=True, exist_ok=True)
 
     destination = data_dir / file.filename

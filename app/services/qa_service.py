@@ -10,6 +10,8 @@ update the mapping in `_to_ask_response` only.
 """
 
 from typing import Any, Dict
+from app.agent.graph.callback import PipelineLoggingCallback
+from app.services.logging_service import RequestLogContext
 
 from app.models.schemas import AskResponse, SourceChunk
 
@@ -22,33 +24,7 @@ class GraphNotReadyError(RuntimeError):
     """Raised when the compiled graph has not been initialized."""
 
 
-# def _to_ask_response(graph_output: Dict[str, Any]) -> AskResponse:
-#     """
-#     Map raw LangGraph output state to the public AskResponse shape.
 
-#     Assumes graph_output contains:
-#       - "answer": str
-#       - "confidence_score": float
-#       - "sources": list of dicts with document/page/chunk_id/similarity_score
-
-#     Update this function if the real GraphState uses different keys
-#     (e.g. graph_output["citation"]["sources"]).
-#     """
-#     raw_sources = graph_output.get("sources", []) or []
-#     sources = [
-#         SourceChunk(
-#             document=s["document"],
-#             page=s["page"],
-#             chunk_id=s["chunk_id"],
-#             similarity_score=s["similarity_score"],
-#         )
-#         for s in raw_sources
-#     ]
-#     return AskResponse(
-#         answer=graph_output.get("answer", ""),
-#         confidence_score=graph_output.get("confidence_score", 0.0),
-#         sources=sources,
-#     )
 
 def _to_ask_response(graph_output: Dict[str, Any]) -> AskResponse:
     """
@@ -99,5 +75,18 @@ def ask_question(question: str) -> AskResponse:
             "Import the real graph in app/services/qa_service.py."
         )
 
-    result: Dict[str, Any] = compiled_graph.invoke({"question": question})
+    log_ctx = RequestLogContext(question)
+    callback = PipelineLoggingCallback(log_ctx)
+
+    try:
+        result: Dict[str, Any] = compiled_graph.invoke(
+            {"question": question},
+            config={"callbacks": [callback]},
+        )
+    except Exception as exc:
+        log_ctx.error = str(exc)
+        log_ctx.finalize(error=str(exc))
+        raise
+
+    log_ctx.finalize(result)
     return _to_ask_response(result)

@@ -35,23 +35,26 @@ class JsonFormatter(logging.Formatter):
 
 
 def _build_logger() -> logging.Logger:
-    log_dir = Path(settings.LOG_DIR if hasattr(settings, "LOG_DIR") else "logs")
+    # Config has lowercase field names: settings.log_level
+    log_dir = Path(getattr(settings, "log_dir", "logs"))
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    logger = logging.getLogger("philips_agent")
-    logger.setLevel(getattr(logging, settings.LOG_LEVEL, logging.INFO))
+    # Existing modules use logging.getLogger(__name__), e.g. "app.agent..."
+    # Using "app" lets their logs propagate to these handlers.
+    logger = logging.getLogger("app")
+    logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+    logger.propagate = False
 
-    if not logger.handlers:  # avoid duplicate handlers on reload
+    if not logger.handlers:
         handler = RotatingFileHandler(
             log_dir / "app.jsonl",
-            maxBytes=10 * 1024 * 1024,  # 10 MB
+            maxBytes=10 * 1024 * 1024,
             backupCount=5,
             encoding="utf-8",
         )
         handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)
 
-        # Also echo to console at INFO+ for local dev visibility.
         console = logging.StreamHandler()
         console.setFormatter(JsonFormatter())
         logger.addHandler(console)
@@ -99,22 +102,43 @@ class RequestLogContext:
     def log_llm_latency(self, seconds: float) -> None:
         self.llm_latency = round(seconds * 1000, 2)  # store as ms
 
-    def finalize(
-        self,
-        retrieved_chunks: Optional[list[dict]] = None,
-        similarity_scores: Optional[list[float]] = None,
-        confidence_score: Optional[float] = None,
-        outcome: str = "responded",  # responded | refused | blocked | error
-        error: Optional[str] = None,
-    ) -> None:
+    def finalize(self, final_state: Optional[dict] = None, error: Optional[str] = None) -> None:
+        """
+        Extracts the fields the log needs from the graph's final AgentState
+        and writes the summary line. Accepts the whole final_state so callers
+        (e.g. the /ask route) don't need to know AgentState's internal shape.
+        """
+        final_state = final_state or {}
+
+        retrieval_result = final_state.get("retrieval_result")
+        retrieved_chunks = (
+            [chunk.model_dump(exclude={"text"}) for chunk in retrieval_result.chunks]
+            if retrieval_result
+            else []
+        )
+        similarity_scores = [
+            chunk["similarity_score"] for chunk in retrieved_chunks
+        ]
+
+        confidence_score = final_state.get("confidence_score")
+
+        if error or final_state.get("refusal_reason") is None and final_state.get("decision") == "error":
+            outcome = "error"
+        elif final_state.get("decision") == "refuse":
+            outcome = "refused"
+        elif final_state.get("is_safe") is False:
+            outcome = "blocked"
+        else:
+            outcome = "responded"
+
         total_ms = round((time.perf_counter() - self.start_time) * 1000, 2)
         logger.info(
             "request_completed",
             extra={"extra_fields": {
                 "request_id": self.request_id,
                 "question": self.question,
-                "retrieved_chunks": retrieved_chunks or [],
-                "similarity_scores": similarity_scores or [],
+                "retrieved_chunks": retrieved_chunks,
+                "similarity_scores": similarity_scores,
                 "llm_latency_ms": self.llm_latency,
                 "execution_time_ms": total_ms,
                 "confidence_score": confidence_score,
