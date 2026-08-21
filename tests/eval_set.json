@@ -1,0 +1,43 @@
+{
+  "_comment": "Labeled eval set for DreamStation 2 grounding evaluation. Expected pages use the indexed PDF page numbers in Dreamstation2.pdf; printed manual page numbers are noted where useful.",
+  "in_scope": [
+    {
+      "id": "q01",
+      "question": "How should I clean the DreamStation 2 humidifier water tank?",
+      "expected_document": "Dreamstation2.pdf",
+      "expected_page": 56,
+      "notes": "Direct cleaning-and-care lookup. The indexed PDF pages 56-57 correspond to manual pages 48-49; the tank should be hand-washed daily and may be dishwasher-washed weekly."
+    },
+    {
+      "id": "q02",
+      "question": "How do I replace the air filter in a DreamStation 2?",
+      "expected_document": "Dreamstation2.pdf",
+      "expected_page": 29,
+      "notes": "Direct setup procedure. The filter-removal and replacement steps are on indexed PDF page 29 (manual page 21)."
+    },
+    {
+      "id": "q03",
+      "question": "Where should I place the DreamStation 2 device during use?",
+      "expected_document": "Dreamstation2.pdf",
+      "expected_page": 22,
+      "notes": "Direct device-setup lookup. The manual says to place it on a firm, flat surface below the sleeping position."
+    }
+  ],
+  "out_of_scope": [
+    {
+      "id": "oos01",
+      "question": "What is the capital of France?",
+      "notes": "Not related to DreamStation 2 or product documentation; should be refused."
+    },
+    {
+      "id": "oos02",
+      "question": "How should I clean a ResMed AirSense 10 humidifier water tank?",
+      "notes": "Plausible CPAP-related question, but it concerns a competitor product not covered by the DreamStation 2 manual; should be refused."
+    },
+    {
+      "id": "oos03",
+      "question": "How do I replace the battery in a DreamStation Go travel CPAP?",
+      "notes": "In-domain Philips respiratory-product question, but DreamStation Go is not covered by the uploaded DreamStation 2 manual; should be refused."
+    }
+  ]
+}
