@@ -594,6 +594,104 @@ uvicorn main:app --reload
 
 ---
 
+## 🐳 Running with Docker
+ 
+The application ships with a CPU-only `Dockerfile` and a `docker-compose.yml` for running the full stack — FastAPI app, FAISS index, and structured logs — as a single containerized service. The LLM (`Qwen2.5-7B-Instruct`) is served through **Ollama**, which runs separately from the app container.
+ 
+> **📝 Note**
+> Ollama is not bundled into the app image. It must be running and reachable — either on your host machine or as a separate container/service — before you start the app container.
+ 
+### 1️⃣ Prerequisites
+ 
+- Docker and Docker Compose installed
+- Ollama installed and running, with the Qwen2.5-7B-Instruct model pulled:
+```bash
+ollama pull qwen2.5:7b-instruct
+ollama serve
+```
+ 
+### 2️⃣ Configure Environment
+ 
+Create a `.env` file in the project root (same variables as the [Configuration](#-configuration) section). The Compose file will also set a few container-specific defaults automatically (`DEVICE`, `VECTOR_DB`, `DATA_DIRECTORY`, `LOG_DIR`), so you don't need to duplicate those in `.env` unless you want to override them.
+ 
+If Ollama is running on your **host machine** (not in a container), the default `OLLAMA_HOST` is already set to reach it via `host.docker.internal`. If you're running Ollama elsewhere — a remote server or a separate container — override it in `.env`:
+ 
+```dotenv
+OLLAMA_HOST=http://your-ollama-host:11434
+```
+ 
+### 3️⃣ Build and Run
+ 
+```bash
+docker compose up --build
+```
+ 
+This will:
+- Build the app image from the `Dockerfile` (CPU-only base, `libgomp1` installed for FAISS/PyTorch)
+- Start the FastAPI app on `http://127.0.0.1:8000`
+- Mount persistent volumes for the FAISS index, uploaded manuals, and logs
+| Resource | URL |
+|---|---|
+| Web Interface | `http://127.0.0.1:8000` |
+| Swagger UI (API Docs) | `http://127.0.0.1:8000/docs` |
+ 
+To run in the background:
+ 
+```bash
+docker compose up --build -d
+```
+ 
+To stop:
+ 
+```bash
+docker compose down
+```
+ 
+### 4️⃣ Persisted Data
+ 
+The Compose file bind-mounts three directories so data survives container restarts and rebuilds:
+ 
+| Host Path | Container Path | Purpose |
+|---|---|---|
+| `./data/vector_db` | `/app/data/vector_db` | Persisted FAISS index |
+| `./data/users` | `/app/data/users` | Uploaded Philips product manuals |
+| `./logs` | `/app/logs` | Structured application logs |
+ 
+Rebuilding the image (`docker compose up --build`) does **not** wipe these — they live on the host and are re-mounted on every container start.
+ 
+> **⚠️ Warning**
+> The container runs as a non-root `appuser`, matching the `Dockerfile`. If you see permission errors on the mounted volumes, check that the host-side `data/` and `logs/` directories are writable by the container's UID.
+ 
+### Container Architecture
+ 
+```mermaid
+graph LR
+    subgraph Host["🖥️ Host Machine"]
+        OLLAMA["Ollama Server<br/>Qwen2.5-7B-Instruct"]
+        VOLDB[("./data/vector_db")]
+        VOLUSERS[("./data/users")]
+        VOLLOGS[("./logs")]
+    end
+ 
+    subgraph Container["🐳 App Container"]
+        UVICORN["Uvicorn + FastAPI"]
+        GRAPH["LangGraph Runtime"]
+    end
+ 
+    GRAPH -->|HTTP| OLLAMA
+    UVICORN --> GRAPH
+    GRAPH -.mounted.-> VOLDB
+    GRAPH -.mounted.-> VOLUSERS
+    GRAPH -.mounted.-> VOLLOGS
+ 
+    style Host fill:#e3f2fd,stroke:#1565c0
+    style Container fill:#e8f5e9,stroke:#2e7d32
+```
+ 
+> **💡 Tip**
+> This CPU-only setup is intended for local development and small-scale demos. For production, place the app behind a reverse proxy (e.g., Nginx) with TLS termination, and consider Kubernetes for orchestration — see [Future Improvements](#-future-improvements).
+---
+
 ## 🗃 Building the Vector Database
 
 ### Step 1 — Add Source Documents
@@ -940,38 +1038,67 @@ graph TB
 
 ## 📈 Impact
 
-> **⚠️ Honesty note:** This project has **not** run a formal pilot with real users as of this writing. The figures below are framed as **projections derived from measured system latency and behavior**, not from field-measured business outcomes (e.g., ticket deflection rate, handle-time reduction). Do not present this section as validated ROI until a pilot has actually run — replace the placeholders once real numbers exist.
+> **⚠️ Honesty note:** This project has **not** run a formal pilot with real users. The numbers below come from **internal log aggregation and a 6-question grounding evaluation set**, not from field-measured business outcomes (ticket deflection, handle-time reduction, agent satisfaction). Sample sizes are small (n=6) — treat these as early system-characterization data, not statistically robust claims, until a larger eval set and a real pilot exist.
 
-**Current status:** [Pre-pilot / Internal testing only / Pilot in progress with (team/group) since (date) / Other — describe accurately]
+**Current status:** Internal testing only — no pilot users yet. Latency and grounding-quality data below are from local runs against the ingested Philips manual set.
 
 ### What has actually been measured
 
-| Metric | How it was measured | Value | Source |
+**Request latency** (aggregated from structured logs, `count=6` completed requests, 1 refused / 5 responded)
+
+| Metric | P50 | P95 | Min | Max |
+|---|---|---|---|---|
+| End-to-end request execution time | 3,679.85 ms | 40,763.85 ms | 89.26 ms | 50,482.33 ms |
+
+| Node | P50 | P95 | Min | Max | Notes |
+|---|---|---|---|---|---|
+| `graph:step:1` (Security) | 0.65 ms | 3.27 ms | 0.53 ms | 4.11 ms | Negligible cost |
+| `graph:step:2` (Document check) | 0.79 ms | 4.45 ms | 0.47 ms | 5.66 ms | Negligible cost |
+| `graph:step:3` (Retrieval) | 108.17 ms | 6,859.12 ms | 71.99 ms | 9,061.47 ms | High P95 variance — worth investigating |
+| `graph:step:4` (Confidence gate) | 0.71 ms | 3.34 ms | 0.60 ms | 4.19 ms | Negligible cost |
+| `graph:step:5` (likely Answer/LLM generation) | 3,560.48 ms | 33,848.93 ms | 0.54 ms | 41,358.26 ms | **Dominant cost** — see gap below |
+| `graph:step:6` (Citation) | 0.39 ms | 2.38 ms | 0.28 ms | 2.44 ms | Negligible cost |
+| `graph:step:7` (Validation) | 0.37 ms | 1.70 ms | 0.32 ms | 2.01 ms | Negligible cost |
+
+> **⚠️ Observability gap:** `LLM latency: count=0` — LLM generation time is not currently being logged as its own metric; node timings are logged as `unknown_node` / unlabeled `graph:step:N` instead. Given step 5's cost profile (3.56s p50, up to 41s p95, near-zero min on the refused case), it is almost certainly where LLM generation happens, but this is an inference from timing shape, not a confirmed attribution. **Action:** add explicit LLM-latency instrumentation before quoting generation time as a standalone number.
+
+**Grounding evaluation** (`tests/eval_set.json`, 6 questions — 3 in-scope, 3 out-of-scope — run against `/ask`)
+
+| Metric | Value | Target | Assessment |
 |---|---|---|---|
-| End-to-end request latency (P50/P95) | [e.g., `Execution Time` field from structured logs, see Logging & Observability] | [fill in from your logs] | Internal logs, [date range] |
-| Retrieval confidence distribution | Confidence Agent scores across test query set | [fill in] | Internal logs, [date range] |
-| Refusal rate | % of `/ask` requests returning `Refused` per the Request Lifecycle | [fill in] | Internal logs, [date range] |
-| Citation coverage | % of non-refused answers with ≥1 valid citation | [fill in] | Validation Agent logs |
+| Citation-presence rate (in-scope) | 100.0% | 100% | ✅ Met |
+| Refusal rate (out-of-scope) | 100.0% | 100% | ✅ Met |
+| False-refusal rate (in-scope) | 33.3% | 0% | ❌ **Gap — see below** |
+| Precision@k (expected doc in sources) | 100.0% | as high as possible | ✅ Met |
+| Avg. confidence (in-scope) | 0.738 | > `SIMILARITY_THRESHOLD` | ✅ Met (threshold 0.75, avg. just below — see note) |
+| Avg. latency | 11.94 s | — | For reference only, n=6 |
+| Errored requests | 0 / 6 | 0 | ✅ Met |
+
+**Per-case detail**
+
+| ID | Scope | Confidence | Cited? | Refused? | Doc Match | Question |
+|---|---|---|---|---|---|---|
+| q01 | in_scope | 0.783 | yes | yes | ✅ | How should I clean the DreamStation 2 humidifier water tank? |
+| q02 | in_scope | 0.730 | yes | no | ✅ | How do I replace the air filter in a DreamStation 2? |
+| q03 | in_scope | 0.701 | yes | no | ✅ | Where should I place the DreamStation 2 device during use? |
+| oos01 | out_of_scope | 0.333 | no | yes | — | What is the capital of France? |
+| oos02 | out_of_scope | 0.761 | yes | yes | — | How should I clean a ResMed AirSense 10 humidifier water tank? |
+| oos03 | out_of_scope | 0.626 | yes | yes | — | How do I replace the battery in a DreamStation Go travel CPAP? |
+
 
 ### What can be reasonably projected from the above (and how)
 
-- **Time-to-answer, if adopted:** if measured retrieval + generation latency is *[X seconds]*, that's a defensible lower bound on how fast a user could get a grounded answer through this tool, **compared to** the manual-search baseline described in Who This Is For — which has not itself been timed yet. State the comparison as directional, not as a precise percentage saved, until the baseline is actually measured.
-- **Where confidence is a proxy for accuracy, not a substitute:** a high confidence score means retrieval found closely matching text — it is not independent proof the final answer is correct. Any claimed accuracy rate must come from actual human review of a sample of answers, not from the confidence score alone.
+- **Time-to-answer, if adopted:** median end-to-end latency of ~3.7s (P50) is a defensible lower bound on how fast a user could get a grounded answer through this tool. The P95 of ~40.8s is a real tail-latency risk for interactive use (e.g., a live call) and should be treated as a blocker for real-time workflow integration until narrowed — this is not yet compared against a timed manual-search baseline (see [Who This Is For](#-who-this-is-for)).
+- **Grounding behavior is directionally sound but not yet reliable:** the system correctly distinguishes lexically-similar-but-wrong-product questions (oos02, oos03) from genuinely in-scope ones, which is the hardest case for a grounding gate to get right. But a 33.3% false-refusal rate on only 3 in-scope test cases means the in-scope reliability claim cannot be generalized yet — it takes only one more accurate answer or one more false refusal to swing this metric by 33 points.
 
-### What is explicitly NOT claimed here
-
-- No claim of ticket deflection, handle-time reduction, or cost savings — these require a real pilot with a comparison group.
-- No claim of user satisfaction or adoption — no users have used this in production yet.
-- No claim of accuracy rate beyond what has been manually spot-checked (state the sample size if you have one, e.g., "manually reviewed N answers against source manuals, M were fully correct").
 
 ### Plan to close the gap
 
-1. [Define pilot scope — e.g., N support agents, M weeks, specific product line's manuals]
-2. [Define baseline measurement — time a sample of manual lookups before pilot starts]
-3. [Define success metrics up front — e.g., median time-to-answer, refusal rate ceiling, agent-reported trust score]
-4. [Run pilot, collect logs per Logging & Observability]
-5. [Replace this section's placeholders with real, dated numbers]
-
+1. **Root-cause q01's false refusal** — check Validation Agent logs for that specific request to see whether a citation was found but discarded, or never attached.
+2. **Instrument LLM latency explicitly** (separate from total node duration) so `graph:step:5` / `unknown_node` cost can be attributed correctly.
+3. **Expand the eval set** beyond 6 questions — 3 in-scope cases is too small to trust a false-refusal percentage.
+4. **Investigate P95 tail latency** on `graph:step:3` (retrieval) and `graph:step:5` (likely generation) before considering this viable for real-time workflows (live call, chat).
+5. **Define and run an actual pilot** per [Who This Is For](#-who-this-is-for) — including a timed manual-search baseline — before making any deflection/time-saved claims externally.
 ---
 
 ## 🗺 Future Improvements
@@ -1023,12 +1150,11 @@ graph TD
 | Infrastructure | Elasticsearch or OpenSearch Integration |
 | Infrastructure | Milvus, Qdrant, or Pinecone Vector Store Support |
 | Infrastructure | Model Quantization for Faster Inference |
-| Infrastructure | Docker and Kubernetes Deployment |
 | Infrastructure | Distributed Worker Architecture with Celery or Ray |
 | Operations | Authentication and Role-Based Access Control |
 | Operations | Monitoring with Prometheus and Grafana |
 | Operations | CI/CD Pipeline with GitHub Actions |
-| Operations | Model Evaluation Dashboard |
+
 
 ---
 
