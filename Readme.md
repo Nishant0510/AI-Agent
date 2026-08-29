@@ -101,9 +101,8 @@ The system showcases a modern **Multi-Agent AI architecture** orchestrated with 
 
 **Primary users**
 
-- **[e.g., Field Service Engineers]** — troubleshoot Philips equipment on-site or remotely and need fast, trustworthy answers to "does the manual say X" questions without paging through a 200-page PDF.
-- **[e.g., L1/L2 Support Agents]** — handle inbound calls/tickets and need to confirm procedures, specs, or error-code meanings against the official manual before responding to a customer.
-- **[Add/replace with your actual target users]**
+- **[Field Service Engineers]** — troubleshoot Philips equipment on-site or remotely and need fast, trustworthy answers to "does the manual say X" questions without paging through a 200-page PDF.
+- **[L1/L2 Support Agents]** — handle inbound calls/tickets and need to confirm procedures, specs, or error-code meanings against the official manual before responding to a customer.
 
 **What they do today, without this**
 
@@ -119,11 +118,10 @@ The system showcases a modern **Multi-Agent AI architecture** orchestrated with 
 
 **Ownership post-launch**
 
-> **📝 Status:** Define who is accountable for this system once it's live — this is currently undefined and should be filled in before treating this as production-ready.
 
-- **Content owner:** [who is responsible for keeping the uploaded manuals current — e.g., a documentation/knowledge-management team]
-- **System owner:** [who is responsible for uptime, model updates, and the vector DB rebuild cadence — e.g., the engineering team that built it, or a platform/MLOps team]
-- **Escalation path:** [what happens when the system refuses to answer or gives a low-confidence response — who reviews the log and closes the gap in documentation]
+- **Content owner:** [The documentation/knowledge-management team]
+- **System owner:** [The engineering team that built it, or a platform/MLOps team]
+- **Escalation path:** [The documentation/knowledge-management team, reviews the log and closes the gap in documentation]
 
 ---
 
