@@ -14,7 +14,7 @@ per project spec.
 """
 import logging
 
-from app.llm.ollama_client import generate
+from app.llm.provider import generate
 from app.models.retrieval import RetrievalResult
 from app.prompts.grounded_answer import build_prompt
 from app.retrieval.retriever import retrieve

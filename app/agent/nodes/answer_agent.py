@@ -3,7 +3,7 @@
 from app.models.retrieval import RetrievedChunk
 
 from app.agent.state.schema import AgentState
-from app.llm.ollama_client import generate 
+from app.llm.provider import generate
 from app.prompts.grounded_answer import build_prompt 
 
 
@@ -43,7 +43,7 @@ def answer_agent_node(state: AgentState) -> AgentState:
 
     answer = generate(prompt)
 
-    print("*******Received answer from Ollama model*******")
+    print("*******Received answer from configured LLM provider*******")
     return {
         **state,
         "answer": answer,

@@ -5,6 +5,7 @@ sentence-transformers
 faiss-cpu
 pydantic
 ollama
+openai
 fastapi
 
 uvicorn
