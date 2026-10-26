@@ -38,6 +38,7 @@ def answer_agent_node(state: AgentState) -> AgentState:
     prompt = build_prompt(
         question=state["question"],
         chunks=retrieval.chunks,
+        conversation_history=state.get("conversation_history") or [],
     )
 
 

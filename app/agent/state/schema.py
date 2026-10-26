@@ -15,11 +15,15 @@ class FinalResponse(TypedDict):
 
 class AgentState(TypedDict):
     question: str
+    # Recent user/assistant turns for resolving follow-up questions. The
+    # checkpointer scopes this history to one conversation thread.
+    conversation_history: list[dict[str, str]]
     is_safe: bool
     documents_available: bool
     retrieval_result: RetrievalResult | None
     confidence_score: float | None
     decision: str | None           # "proceed" | "refuse"
+    rag_decision: str | None        # "use_rag" | "direct_llm"
     answer: str | None
     sources: list[SourceCitation] | None
     is_grounded: bool | None

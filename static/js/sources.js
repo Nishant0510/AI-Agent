@@ -48,6 +48,10 @@
         sourcesPanel.innerHTML = '<p class="text-muted mb-0">Loading sources…</p>';
         try {
             const resp = await fetch("/sources");
+            if (resp.status === 401) {
+                window.location.replace("/login");
+                return;
+            }
             if (!resp.ok) {
                 sourcesPanel.innerHTML = '<p class="text-danger mb-0">Could not load sources.</p>';
                 return;

@@ -9,15 +9,23 @@ real GraphState differs from the minimal contract assumed here
 update the mapping in `_to_ask_response` only.
 """
 
+from threading import Lock
 from typing import Any, Dict
 from app.agent.graph.callback import PipelineLoggingCallback
 from app.services.logging_service import RequestLogContext
 
 from app.models.schemas import AskResponse, SourceChunk
 
-# TODO: import the actual compiled graph once available, e.g.:
-from app.agent.graph.build_graph import compiled_graph
-#compiled_graph = None  # placeholder — replace with real compiled LangGraph
+_MAX_MEMORY_MESSAGES = 12  # six recent user/assistant turns
+_conversation_locks: dict[str, Lock] = {}
+_conversation_locks_guard = Lock()
+
+
+def _lock_for_conversation(conversation_id: str) -> Lock:
+    # Serialize turns in a conversation so concurrent requests cannot lose
+    # checkpoint updates.
+    with _conversation_locks_guard:
+        return _conversation_locks.setdefault(conversation_id, Lock())
 
 
 class GraphNotReadyError(RuntimeError):
@@ -26,7 +34,9 @@ class GraphNotReadyError(RuntimeError):
 
 
 
-def _to_ask_response(graph_output: Dict[str, Any]) -> AskResponse:
+def _to_ask_response(
+    graph_output: Dict[str, Any], conversation_id: str
+) -> AskResponse:
     """
     Map raw LangGraph output state to the public AskResponse shape.
 
@@ -52,10 +62,17 @@ def _to_ask_response(graph_output: Dict[str, Any]) -> AskResponse:
         confidence_score=final.get("confidence_score") or 0.0,
         sources=sources,
         reason=final.get("reason"),  # see note below
+        conversation_id=conversation_id,
     )
 
 
-def ask_question(question: str) -> AskResponse:
+def ask_question(
+    question: str,
+    conversation_id: str,
+    graph,
+    conversation_history: list[dict[str, str]] | None = None,
+    response_conversation_id: str | None = None,
+) -> AskResponse:
     """
     Run a question through the full agent graph
     (Security -> Document -> Retrieval -> Confidence -> Answer ->
@@ -69,7 +86,7 @@ def ask_question(question: str) -> AskResponse:
     per the architecture ground rules (hard short-circuit is enforced
     in the graph, not here).
     """
-    if compiled_graph is None:
+    if graph is None:
         raise GraphNotReadyError(
             "Compiled LangGraph is not wired up yet. "
             "Import the real graph in app/services/qa_service.py."
@@ -77,16 +94,44 @@ def ask_question(question: str) -> AskResponse:
 
     log_ctx = RequestLogContext(question)
     callback = PipelineLoggingCallback(log_ctx)
+    thread_config = {"configurable": {"thread_id": conversation_id}}
+    invoke_config = {
+        **thread_config,
+        "callbacks": [callback],
+    }
 
-    try:
-        result: Dict[str, Any] = compiled_graph.invoke(
-            {"question": question},
-            config={"callbacks": [callback]},
-        )
-    except Exception as exc:
-        log_ctx.error = str(exc)
-        log_ctx.finalize(error=str(exc))
-        raise
+    with _lock_for_conversation(conversation_id):
+        try:
+            if conversation_history is None:
+                snapshot = graph.get_state(thread_config)
+                previous_history = (snapshot.values or {}).get(
+                    "conversation_history", []
+                )[-(_MAX_MEMORY_MESSAGES - 2):]
+            else:
+                previous_history = conversation_history[-(_MAX_MEMORY_MESSAGES - 2):]
+
+            result: Dict[str, Any] = graph.invoke(
+                {
+                    "question": question,
+                    "conversation_history": previous_history,
+                },
+                config=invoke_config,
+            )
+
+            final = result.get("final_response") or {}
+            updated_history = [
+                *previous_history,
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": final.get("answer") or ""},
+            ][-_MAX_MEMORY_MESSAGES:]
+            # Persist completed turns, including refusals, to the same thread.
+            graph.update_state(
+                thread_config, {"conversation_history": updated_history}
+            )
+        except Exception as exc:
+            log_ctx.error = str(exc)
+            log_ctx.finalize(error=str(exc))
+            raise
 
     log_ctx.finalize(result)
-    return _to_ask_response(result)
+    return _to_ask_response(result, response_conversation_id or conversation_id)

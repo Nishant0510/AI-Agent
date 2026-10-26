@@ -323,7 +323,9 @@ The Security Agent actively detects and blocks adversarial prompts, including:
 flowchart TD
     START(["User Question"]) --> VALID["Input Validation"]
     VALID --> SEC["Security Agent<br/>(Prompt Injection Detection)"]
-    SEC --> DOCCHECK["Document Availability Check"]
+    SEC --> ROUTE{"Jev Decision Agent<br/>Does this need RAG?"}
+    ROUTE -->|Greeting / thanks| CHAT["Configured LLM reply<br/>No RAG"]
+    ROUTE -->|Substantive question| DOCCHECK["Document Availability Check"]
     DOCCHECK --> EMBED["Embedding Generation"]
     EMBED --> RETRIEVE["FAISS Retrieval"]
     RETRIEVE --> EVAL["Retrieval Evaluation"]
@@ -339,12 +341,16 @@ flowchart TD
     CALC --> GROUND["Grounding Validation"]
     GROUND --> FINAL(["Final Response"])
     REFUSE --> FINAL
+    CHAT --> FINAL
 
     style START fill:#bbdefb,stroke:#1565c0
     style FINAL fill:#c8e6c9,stroke:#2e7d32
     style REFUSE fill:#ffcdd2,stroke:#c62828
     style CONF fill:#fff9c4,stroke:#f57f17
+    style ROUTE fill:#fff9c4,stroke:#f57f17
 ```
+
+Jev (TypeSafe System One) makes the routing choice after the security gate. Greetings and brief social messages go to the configured LLM for a conversational reply without document checks, embedding, or vector search. Substantive requests continue through the existing RAG and confidence gates. Configure `TYPESAFE_API_KEY` in `.env` (the application also accepts `JEV_API_KEY`). If Jev is unavailable, the graph defaults to RAG so product questions remain subject to the evidence checks.
 
 > **⚠️ Warning**
 > If retrieval confidence falls below `SIMILARITY_THRESHOLD`, the workflow short-circuits directly to a refusal response — the LLM generation stage is never invoked. This prevents hallucinated answers from ever reaching the user.
@@ -571,6 +577,11 @@ DEVICE=cpu
 | `SIMILARITY_THRESHOLD` | Minimum similarity score to proceed with generation | `0.50` |
 | `MAX_CONTEXT_CHUNKS` | Maximum chunks passed into LLM context | `5` |
 | `DEVICE` | Inference device (`cpu` or `cuda`) | `cpu` |
+| `JWT_SECRET_KEY` | Secret used to sign JWTs; set a unique value with at least 32 characters | Required |
+| `JWT_EXPIRE_MINUTES` | JWT session lifetime in minutes | `60` |
+| `AUTH_COOKIE_SECURE` | Send the HttpOnly auth cookie only over HTTPS | `false` for local development |
+| `ADMIN_EMAIL` | Reserved administrator account identifier | `admin@philips` |
+| `ADMIN_PASSWORD` | Password for the provisioned administrator; at least 12 characters | Required |
 
 > **💡 Tip**
 > Lower `SIMILARITY_THRESHOLD` cautiously — reducing it increases recall but also increases the risk of low-quality or loosely related context being passed to the LLM.
@@ -578,6 +589,8 @@ DEVICE=cpu
 ---
 
 ## 🚀 Running the Application
+
+For a local `uvicorn` run, start a PostgreSQL server and set `DATABASE_URL` in `.env` to a URL reachable from the host (typically `localhost`). The Docker Compose setup below starts PostgreSQL for you; its in-network URL uses host `db`.
 
 Start the backend server:
 
@@ -594,7 +607,7 @@ uvicorn main:app --reload
 
 ## 🐳 Running with Docker
  
-The application ships with a CPU-only `Dockerfile` and a `docker-compose.yml` for running the full stack — FastAPI app, FAISS index, and structured logs — as a single containerized service. The LLM (`Qwen2.5-7B-Instruct`) is served through **Ollama**, which runs separately from the app container.
+The application ships with a CPU-only `Dockerfile` and a `docker-compose.yml` for running the FastAPI app and PostgreSQL checkpoint database. The FAISS index, uploaded manuals, and logs are stored in persistent volumes. The LLM (`Qwen2.5-7B-Instruct`) is served through **Ollama**, which runs separately from these containers.
  
 > **📝 Note**
 > Ollama is not bundled into the app image. It must be running and reachable — either on your host machine or as a separate container/service — before you start the app container.
@@ -610,7 +623,7 @@ ollama serve
  
 ### 2️⃣ Configure Environment
  
-Create a `.env` file in the project root (same variables as the [Configuration](#-configuration) section). The Compose file will also set a few container-specific defaults automatically (`DEVICE`, `VECTOR_DB`, `DATA_DIRECTORY`, `LOG_DIR`), so you don't need to duplicate those in `.env` unless you want to override them.
+Create `.env` from `.env.example`. Set a unique `POSTGRES_PASSWORD`, and make sure its credentials match `DATABASE_URL` (use host `db` for Docker Compose). Replace the JWT and administrator password placeholders before starting. Generate `JWT_SECRET_KEY` with a secure random generator; use at least 32 characters (for example, `python -c "import secrets; print(secrets.token_urlsafe(48))"`). `ADMIN_EMAIL` defaults to `admin@philips`, and that account is provisioned from `ADMIN_PASSWORD` when the app starts. Public signup cannot register the reserved admin email. Set `AUTH_COOKIE_SECURE=true` when serving through HTTPS. The Compose file sets container-specific values such as `DEVICE`, `VECTOR_DB`, `DATA_DIRECTORY`, and `LOG_DIR`.
  
 If Ollama is running on your **host machine** (not in a container), the default `OLLAMA_HOST` is already set to reach it via `host.docker.internal`. If you're running Ollama elsewhere — a remote server or a separate container — override it in `.env`:
  
@@ -621,13 +634,14 @@ OLLAMA_HOST=http://your-ollama-host:11434
 ### 3️⃣ Build and Run
  
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
  
 This will:
 - Build the app image from the `Dockerfile` (CPU-only base, `libgomp1` installed for FAISS/PyTorch)
+- Start PostgreSQL and wait for it to become healthy
 - Start the FastAPI app on `http://127.0.0.1:8000`
-- Mount persistent volumes for the FAISS index, uploaded manuals, and logs
+- Mount persistent volumes for PostgreSQL checkpoints, the FAISS index, uploaded manuals, and logs
 | Resource | URL |
 |---|---|
 | Web Interface | `http://127.0.0.1:8000` |
@@ -647,13 +661,14 @@ docker compose down
  
 ### 4️⃣ Persisted Data
  
-The Compose file bind-mounts three directories so data survives container restarts and rebuilds:
+The Compose file bind-mounts the manual, vector-index, and log directories, and uses a named volume for PostgreSQL. These survive container restarts and image rebuilds:
  
 | Host Path | Container Path | Purpose |
 |---|---|---|
 | `./data/vector_db` | `/app/data/vector_db` | Persisted FAISS index |
 | `./data/users` | `/app/data/users` | Uploaded Philips product manuals |
 | `./logs` | `/app/logs` | Structured application logs |
+| `postgres_data` | PostgreSQL data directory | User accounts, saved conversations and messages, plus LangGraph checkpoints |
  
 Rebuilding the image (`docker compose up --build`) does **not** wipe these — they live on the host and are re-mounted on every container start.
  
@@ -675,12 +690,19 @@ graph LR
         UVICORN["Uvicorn + FastAPI"]
         GRAPH["LangGraph Runtime"]
     end
+
+    subgraph Database["🐘 PostgreSQL Container"]
+        PG["Users, Chat History<br/>and LangGraph Checkpoints"]
+        PGDATA[("postgres_data")]
+    end
  
     GRAPH -->|HTTP| OLLAMA
     UVICORN --> GRAPH
     GRAPH -.mounted.-> VOLDB
     GRAPH -.mounted.-> VOLUSERS
     GRAPH -.mounted.-> VOLLOGS
+    GRAPH --> PG
+    PG -.mounted.-> PGDATA
  
     style Host fill:#e3f2fd,stroke:#1565c0
     style Container fill:#e8f5e9,stroke:#2e7d32
@@ -729,15 +751,15 @@ flowchart LR
 
 ## 🖥 Using the UI
 
-Once the FastAPI server is running, navigate to `http://127.0.0.1:8000` to access:
+Once the FastAPI server is running, open `http://127.0.0.1:8000`. New users create an account at `/signup`; existing users sign in at `/login`. Both successful signup and login redirect to `/chat`.
 
 | Component | Description |
 |---|---|
-| 📤 **PDF Upload** | Upload new Philips product manuals directly through the browser |
+| 📤 **PDF Upload** | Admin-only upload of Philips product manuals |
 | 💬 **Chat Window** | Ask natural-language questions about uploaded documentation |
 | 🎯 **Confidence Badge** | Visual indicator of the system's confidence in each answer |
 | 📚 **Source Panel** | Displays cited documents, page numbers, and retrieved chunks |
-| 🕘 **Conversation History** | Maintains a record of prior questions and answers |
+| 🕘 **Conversation History** | User-owned conversations and messages persist in PostgreSQL and are available after sign-in |
 | 📱 **Responsive Bootstrap Layout** | Fully responsive across desktop and mobile |
 
 ---
@@ -746,20 +768,55 @@ Once the FastAPI server is running, navigate to `http://127.0.0.1:8000` to acces
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/` | Web Interface |
+| `GET` | `/` | Redirect to sign-in |
+| `GET` | `/login`, `/signup` | Authentication pages |
+| `GET` | `/chat` | Authenticated chat page |
+| `POST` | `/api/auth/signup` | Create a regular user and sign in |
+| `POST` | `/api/auth/login` | Sign in and receive a JWT |
+| `POST` | `/api/auth/logout` | Clear the auth cookie |
+| `GET` | `/api/auth/me` | Return the signed-in user's profile and role |
+| `GET`, `POST` | `/api/conversations` | List or create conversations for the signed-in user |
+| `GET` | `/api/conversations/{id}/messages` | Read messages for an owned conversation |
 | `GET` | `/health` | Health Check |
-| `POST` | `/upload` | Upload PDFs |
-| `POST` | `/ask` | Ask Questions |
-| `GET` | `/sources` | View Uploaded Sources |
+| `POST` | `/upload` | Upload PDFs (admin only) |
+| `POST` | `/ask` | Ask a question (authenticated) |
+| `GET` | `/sources` | View sources (authenticated) |
+
+Signup and login accept JSON with `email` and `password`; regular account passwords must be at least 8 characters. Passwords are stored as Argon2 hashes. Successful authentication returns a short-lived JWT and sets an HttpOnly, SameSite cookie for the browser; API clients can send the returned token as `Authorization: Bearer <token>`. The administrator role is assigned only during server-side provisioning, never through public signup or user-supplied JWT claims.
+
+### Authentication and chat storage flow
+
+```mermaid
+flowchart LR
+    A[Signup or login] --> B[Verify credentials / hash password]
+    B --> C[Issue signed JWT]
+    C --> D[Redirect browser to chat]
+    D --> E[Authenticated API request]
+    E --> F{Role check}
+    F -->|Admin| G[Chat and manual upload]
+    F -->|User| H[Chat only]
+    G --> I[(PostgreSQL)]
+    H --> I
+    I --> J[User-owned conversations and messages]
+    I --> K[LangGraph checkpoint memory]
+```
+
+The application creates `app_users`, `chat_conversations`, and `chat_messages` tables idempotently at startup. Each conversation and message is associated with a user; the conversation ID is checked against that owner before `/ask` or message history access. LangGraph checkpoint thread IDs also include the user ID. The chat UI retrieves saved history from PostgreSQL instead of browser local storage.
 
 <details>
 <summary><strong>📮 Example: POST /ask</strong></summary>
 
 ```bash
+curl -c cookies.txt -b cookies.txt -X POST "http://127.0.0.1:8000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"your-email@example.com","password":"your-password"}'
+
 curl -X POST "http://127.0.0.1:8000/ask" \
+  -b cookies.txt \
   -H "Content-Type: application/json" \
   -d '{
-        "question": "What is the recommended cleaning cycle for the Philips AVENT sterilizer?"
+        "question": "What is the recommended cleaning cycle for the Philips AVENT sterilizer?",
+        "conversation_id": "d9af8b8e-c3f1-4dd3-85c0-55a6f21588e5"
       }'
 ```
 
@@ -769,6 +826,8 @@ curl -X POST "http://127.0.0.1:8000/ask" \
 {
   "answer": "...",
   "confidence_score": 0.87,
+  "conversation_id": "d9af8b8e-c3f1-4dd3-85c0-55a6f21588e5",
+  "reason": null,
   "sources": [
     {
       "document": "AVENT_Sterilizer_Manual.pdf",
@@ -780,7 +839,11 @@ curl -X POST "http://127.0.0.1:8000/ask" \
 }
 ```
 
+For a greeting, the response includes `"reason": "direct_llm"`, an empty `sources` array, and a conversational answer generated by the configured LLM.
+
 </details>
+
+`conversation_id` is optional; if omitted, the API creates a new saved conversation. Reuse the returned ID on later `/ask` calls to continue it. The browser UI creates conversations, loads their message history from PostgreSQL, and starts another with **New**. Recent turns are provided to the agent for follow-up context, while product answers still require supporting passages from indexed manuals.
 
 ---
 

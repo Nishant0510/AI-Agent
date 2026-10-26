@@ -9,6 +9,31 @@ body {
     background-color: #f5f6f8;
 }
 
+.auth-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: linear-gradient(135deg, #eef4ff, #f7f8fa 55%, #e9f1ff);
+}
+
+.auth-card {
+    width: min(100%, 440px);
+    border: 0;
+    border-radius: 1rem;
+}
+
+.conversation-list {
+    max-height: 72vh;
+    overflow-y: auto;
+}
+
+.conversation-list .list-group-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .chat-window {
     height: 55vh;
     overflow-y: auto;

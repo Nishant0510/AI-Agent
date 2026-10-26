@@ -39,6 +39,23 @@ class Settings:
         "http://localhost:11434"
     )
 
+    # PostgreSQL connection used by LangGraph's persistent checkpointer.
+    database_url: str = os.getenv("DATABASE_URL", "")
+
+    # Authentication and initial administrator credentials.
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "")
+    jwt_expire_minutes: int = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
+    auth_cookie_secure: bool = os.getenv("AUTH_COOKIE_SECURE", "false").lower() == "true"
+    admin_email: str = os.getenv("ADMIN_EMAIL", "admin@philips").strip().lower()
+    admin_password: str = os.getenv("ADMIN_PASSWORD", "")
+
+    # TypeSafe Jev (System One) query-routing decision agent.
+    jev_api_key: str = os.getenv("TYPESAFE_API_KEY") or os.getenv("JEV_API_KEY", "")
+    jev_model: str = os.getenv("JEV_MODEL", "jev-latest")
+    jev_api_url: str = os.getenv(
+        "JEV_API_URL", "https://api.typesafe.ai/v1/systemone"
+    )
+
     log_dir: str = os.getenv("LOG_DIR", "logs")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 

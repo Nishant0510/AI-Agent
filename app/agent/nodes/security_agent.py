@@ -46,6 +46,7 @@ def security_agent_node(state: AgentState) -> AgentState:
                 "answer": REFUSAL_MESSAGE_UNSAFE,
                 "confidence_score": None,
                 "sources": [],
+                "reason": "blocked",
             },
         }
 

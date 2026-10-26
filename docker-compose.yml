@@ -1,4 +1,19 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-philips_agent}
+      POSTGRES_USER: ${POSTGRES_USER:-philips_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   app:
     build:
       context: .
@@ -7,11 +22,15 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
       DEVICE: cpu
       VECTOR_DB: data/vector_db
       DATA_DIRECTORY: data/users
       LOG_DIR: logs
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       # Uses a locally running Ollama instance by default. Override OLLAMA_HOST
       # in .env when using a remote Ollama server.
       OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
@@ -23,3 +42,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+
+volumes:
+  postgres_data:

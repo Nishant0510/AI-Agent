@@ -37,6 +37,15 @@
                 body: formData,
             });
 
+            if (resp.status === 401) {
+                window.location.replace("/login");
+                return;
+            }
+            if (resp.status === 403) {
+                setStatus("Only the administrator account can upload manuals.", "danger");
+                return;
+            }
+
             if (resp.status === 400) {
                 const data = await resp.json().catch(() => ({}));
                 setStatus(data.details || "That file couldn't be accepted. Check the file type and try again.", "danger");

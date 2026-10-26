@@ -11,16 +11,23 @@ from app.agent.nodes.answer_agent import answer_agent_node
 from app.agent.nodes.citation_agent import citation_agent_node
 from app.agent.nodes.validation_agent import validation_agent_node
 from app.agent.nodes.refusal import refusal_node
+from app.agent.nodes.decision_agent import (
+    decision_agent_node,
+    route_after_decision,
+    direct_llm_response_node,
+)
 from app.agent.routers.security_router import route_after_security
 from app.agent.routers.document_router import route_after_document_check
 from app.agent.routers.confidence_router import route_on_confidence
 
 
-def build_graph():
+def build_graph(checkpointer):
     print("Building agent graph...")
     graph = StateGraph(AgentState)
 
     graph.add_node("security_agent", security_agent_node)
+    graph.add_node("decision_agent", decision_agent_node)
+    graph.add_node("direct_llm_response", direct_llm_response_node)
     graph.add_node("document_agent", document_agent_node)
     graph.add_node("retrieval_agent", retrieval_agent_node)
     graph.add_node("confidence_agent", confidence_agent_node)
@@ -36,8 +43,15 @@ def build_graph():
     graph.add_conditional_edges(
         "security_agent",
         route_after_security,
-        {"blocked": "refusal", "proceed": "document_agent"},
+        {"blocked": "refusal", "proceed": "decision_agent"},
     )
+
+    graph.add_conditional_edges(
+        "decision_agent",
+        route_after_decision,
+        {"direct_llm": "direct_llm_response", "use_rag": "document_agent"},
+    )
+    graph.add_edge("direct_llm_response", END)
 
     # Document availability gate
     graph.add_conditional_edges(
@@ -61,6 +75,4 @@ def build_graph():
     graph.add_edge("validation_agent", END)
     graph.add_edge("refusal", END)
     print("Graph built successfully.")
-    return graph.compile()
-
-compiled_graph = build_graph()    
+    return graph.compile(checkpointer=checkpointer)

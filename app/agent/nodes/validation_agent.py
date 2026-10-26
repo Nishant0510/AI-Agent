@@ -28,6 +28,7 @@ def validation_agent_node(state: AgentState) -> AgentState:
                 "answer": REFUSAL_MESSAGE_UNGROUNDED,
                 "confidence_score": state["confidence_score"],
                 "sources": [],
+                "reason": "ungrounded",
             },
         }
     print("Validation Passed")
@@ -38,5 +39,6 @@ def validation_agent_node(state: AgentState) -> AgentState:
             "answer": state["answer"],
             "confidence_score": state["confidence_score"],
             "sources": state["sources"],
+            "reason": None,
         },
     }

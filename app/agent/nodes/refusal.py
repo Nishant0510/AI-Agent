@@ -43,6 +43,7 @@ def refusal_node(state: AgentState) -> AgentState:
             "answer": message,
             "confidence_score": state.get("confidence_score"),
             "sources": [],
+            "reason": reason,
         },
     }
 # def refusal_node(state: AgentState) -> AgentState:
